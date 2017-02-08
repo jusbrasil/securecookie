@@ -55,7 +55,7 @@ func TestDecodeSignedValue(t *testing.T) {
     }
 
     decode := func(name, signedValue string) string {
-        return MustDecodeSignedValue(secret, name, signedValue)
+        return MustDecodeSignedValue(secret, name, signedValue, 31)
     }
 
     xs := []struct {
@@ -104,7 +104,7 @@ func TestSecureCookie(t *testing.T) {
     t.Logf("Response Header: %v", resp.Header)
     t.Logf("Response Cookies: %v", resp.Cookies())
 
-    if c, err := GetSecureCookie(resp, secret, "foo"); err != nil {
+    if c, err := GetSecureCookie(resp, secret, "foo", 31); err != nil {
         t.Errorf("%v", err)
     } else {
         if c.Value != "bar" {
@@ -187,7 +187,7 @@ func TestCookieTampering(t *testing.T) {
 
     tamperedValue := fmt.Sprintf("1234|5678%v|%v", timestamp, sig)
 
-    if _, err := DecodeSignedValue(secret, "foo", tamperedValue); err == nil {
+    if _, err := DecodeSignedValue(secret, "foo", tamperedValue, 31); err == nil {
         t.Errorf("Tampered cookie should be rejected!")
     }
 }
