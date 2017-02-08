@@ -9,139 +9,139 @@
 package securecookie
 
 import (
-    "fmt"
-    "bytes"
-    "time"
-    "crypto/sha1"
-    "crypto/hmac"
-    "encoding/hex"
-    "encoding/base64"
-    "strconv"
-    "strings"
-    "net/http"
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // WithCookie is usually a http.Request or http.Response.
 type WithCookie interface {
-    Cookies() []*http.Cookie
+	Cookies() []*http.Cookie
 }
 
-func cookieIsExpired (cookieTime time.Time) bool {
-    return cookieTime.Before(time.Now().AddDate(0, 0, -31))
+func cookieIsExpired(cookieTime time.Time, expireAfterDays int) bool {
+	return cookieTime.Before(time.Now().AddDate(0, 0, -expireAfterDays))
 }
 
-func cookieIsFromFuture(cookieTime time.Time) bool {
-    return cookieTime.After(time.Now().AddDate(0, 0, 31))
+func cookieIsFromFuture(cookieTime time.Time, expireAfterDays int) bool {
+	return cookieTime.After(time.Now().AddDate(0, 0, expireAfterDays))
 }
 
 func cookieIsTampered(timestamp []byte) bool {
-    return bytes.HasPrefix(timestamp, []byte("0"))
+	return bytes.HasPrefix(timestamp, []byte("0"))
 }
 
-func checkTimestamp(bTimestamp []byte) error {
-    var timestamp int64
+func checkTimestamp(bTimestamp []byte, expireAfterDays int) error {
+	var timestamp int64
 
-    if t, err := strconv.ParseInt(string(bTimestamp), 0, 64); err != nil {
-        return fmt.Errorf("Invalid timestamp: %v, got error: %s",
-                          bTimestamp, err)
-    } else {
-        timestamp = t
-    }
+	if t, err := strconv.ParseInt(string(bTimestamp), 0, 64); err != nil {
+		return fmt.Errorf("Invalid timestamp: %v, got error: %s",
+			bTimestamp, err)
+	} else {
+		timestamp = t
+	}
 
-    cookieTime := time.Unix(timestamp, 0)
+	cookieTime := time.Unix(timestamp, 0)
 
-    if cookieIsExpired(cookieTime) {
-        return fmt.Errorf("Expired Cookie")
-    }
+	if cookieIsExpired(cookieTime, expireAfterDays) {
+		return fmt.Errorf("Expired Cookie")
+	}
 
-    if cookieIsFromFuture(cookieTime) {
-        return fmt.Errorf("Cookie timestamp is in the future," +
-                          "possible tampering")
-    }
+	if cookieIsFromFuture(cookieTime, expireAfterDays) {
+		return fmt.Errorf("Cookie timestamp is in the future," +
+			"possible tampering")
+	}
 
-    if cookieIsTampered(bTimestamp) {
-        return fmt.Errorf("Tampered cookie")
-    }
+	if cookieIsTampered(bTimestamp) {
+		return fmt.Errorf("Tampered cookie")
+	}
 
-    return nil
+	return nil
 }
 
 // DecodeSignedValue returns the given signed cookie if it validates, or error.
-func DecodeSignedValue(secret, name, signedValue string) (string, error) {
-    var decodedValue string
+func DecodeSignedValue(secret, name, signedValue string, expireAfterDays int) (string, error) {
+	var decodedValue string
 
-    if signedValue == "" {
-        return "", fmt.Errorf("Signed value is empty")
-    }
+	if signedValue == "" {
+		return "", fmt.Errorf("Signed value is empty")
+	}
 
-    parts := bytes.Split([]byte(signedValue),[]byte("|"))
+	parts := bytes.Split([]byte(signedValue), []byte("|"))
 
-    if len(parts) != 3 {
-        return "", fmt.Errorf("Incomplete signed value")
-    }
+	if len(parts) != 3 {
+		return "", fmt.Errorf("Incomplete signed value")
+	}
 
-    value := parts[0]
-    timestamp := parts[1]
-    signature := parts[2]
+	value := parts[0]
+	timestamp := parts[1]
+	signature := parts[2]
 
-    newSignature := createSignature(secret, []byte(name), value, timestamp)
+	newSignature := createSignature(secret, []byte(name), value, timestamp)
 
-    if !bytes.Equal(signature, newSignature) {
-        return "", fmt.Errorf("Invalid signature")
-    }
+	if !bytes.Equal(signature, newSignature) {
+		return "", fmt.Errorf("Invalid signature")
+	}
 
-    if err := checkTimestamp(timestamp); err != nil {
-        return "", err
-    }
+	if err := checkTimestamp(timestamp, expireAfterDays); err != nil {
+		return "", err
+	}
 
-    if data, err := base64.URLEncoding.DecodeString(string(value)); err == nil {
-        decodedValue = string(data)
-    }
+	if data, err := base64.URLEncoding.DecodeString(string(value)); err == nil {
+		decodedValue = string(data)
+	}
 
-    return decodedValue, nil
+	return decodedValue, nil
 }
 
-func MustDecodeSignedValue(secret, name, signedValue string) string {
-    v, err := DecodeSignedValue(secret, name, signedValue)
+func MustDecodeSignedValue(secret, name, signedValue string, expireAfterDays int) string {
+	v, err := DecodeSignedValue(secret, name, signedValue, expireAfterDays)
 
-    if err != nil {
-        panic(err)
-    }
+	if err != nil {
+		panic(err)
+	}
 
-    return v
+	return v
 }
 
 func createSignature(secret string, parts ...[]byte) []byte {
-    h := hmac.New(sha1.New, []byte(secret))
+	h := hmac.New(sha1.New, []byte(secret))
 
-    for _, x := range parts {
-        h.Write(x)
-    }
+	for _, x := range parts {
+		h.Write(x)
+	}
 
-    hexDigest := make([]byte, 64)
-    hex.Encode(hexDigest, h.Sum(nil))
+	hexDigest := make([]byte, 64)
+	hex.Encode(hexDigest, h.Sum(nil))
 
-    return hexDigest[:bytes.Index(hexDigest, []byte("\000"))]
+	return hexDigest[:bytes.Index(hexDigest, []byte("\000"))]
 }
 
 // CreateSignedValue signs and timestamps a string so it cannot be forged.
 func CreateSignedValue(secret, name, value string, createdAt time.Time) string {
-    ts := fmt.Sprint(createdAt.Unix())
+	ts := fmt.Sprint(createdAt.Unix())
 
-    b64Value := base64.URLEncoding.EncodeToString([]byte(value))
+	b64Value := base64.URLEncoding.EncodeToString([]byte(value))
 
-    signature := createSignature(secret,
-                                 []byte(name),
-                                 []byte(b64Value),
-                                 []byte(ts))
+	signature := createSignature(secret,
+		[]byte(name),
+		[]byte(b64Value),
+		[]byte(ts))
 
-    signedValue := strings.Join([]string{b64Value, ts, fmt.Sprintf("%s", signature)}, "|")
+	signedValue := strings.Join([]string{b64Value, ts, fmt.Sprintf("%s", signature)}, "|")
 
-    return signedValue
+	return signedValue
 }
 
 func SignCookie(c *http.Cookie, secret string) {
-    c.Value = CreateSignedValue(secret, c.Name, c.Value, time.Now())
+	c.Value = CreateSignedValue(secret, c.Name, c.Value, time.Now())
 }
 
 // SetSecureCookie signs and timestamps a cookie so it cannot be forged.
@@ -150,9 +150,9 @@ func SignCookie(c *http.Cookie, secret string) {
 // Secure cookies may contain arbitrary byte values, not just unicode
 // strings (unlike regular cookies)
 func SetSecureCookie(w http.ResponseWriter, secret string, c *http.Cookie) {
-    SignCookie(c, secret)
+	SignCookie(c, secret)
 
-    http.SetCookie(w, c)
+	http.SetCookie(w, c)
 }
 
 // GetSecureCookie returns the named cookie provided in the response or ErrNoCookie if not found,
@@ -161,24 +161,24 @@ func SetSecureCookie(w http.ResponseWriter, secret string, c *http.Cookie) {
 // with http.Get client response;
 // secret should be a long, random sequence of bytes
 func GetSecureCookie(r WithCookie, secret, name string) (*http.Cookie, error) {
-    var c *http.Cookie
+	var c *http.Cookie
 
-    for _, x := range r.Cookies() {
-        if x.Name == name {
-            c = x
-            break
-        }
-    }
+	for _, x := range r.Cookies() {
+		if x.Name == name {
+			c = x
+			break
+		}
+	}
 
-    if c == nil {
-        return nil, http.ErrNoCookie
-    }
+	if c == nil {
+		return nil, http.ErrNoCookie
+	}
 
-    if v, err := DecodeSignedValue(secret, c.Name, c.Value); err != nil {
-        return nil, err
-    } else {
-        c.Value = v
-    }
+	if v, err := DecodeSignedValue(secret, c.Name, c.Value); err != nil {
+		return nil, err
+	} else {
+		c.Value = v
+	}
 
-    return c, nil
+	return c, nil
 }
