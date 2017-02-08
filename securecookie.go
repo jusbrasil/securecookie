@@ -26,19 +26,19 @@ type WithCookie interface {
 	Cookies() []*http.Cookie
 }
 
-func cookieIsExpired(cookieTime time.Time, expireAfterDays int) bool {
-	return cookieTime.Before(time.Now().AddDate(0, 0, -expireAfterDays))
+func cookieIsExpired(cookieTime time.Time, maxAgeDays int) bool {
+	return cookieTime.Before(time.Now().AddDate(0, 0, -maxAgeDays))
 }
 
-func cookieIsFromFuture(cookieTime time.Time, expireAfterDays int) bool {
-	return cookieTime.After(time.Now().AddDate(0, 0, expireAfterDays))
+func cookieIsFromFuture(cookieTime time.Time, maxAgeDays int) bool {
+	return cookieTime.After(time.Now().AddDate(0, 0, maxAgeDays))
 }
 
 func cookieIsTampered(timestamp []byte) bool {
 	return bytes.HasPrefix(timestamp, []byte("0"))
 }
 
-func checkTimestamp(bTimestamp []byte, expireAfterDays int) error {
+func checkTimestamp(bTimestamp []byte, maxAgeDays int) error {
 	var timestamp int64
 
 	if t, err := strconv.ParseInt(string(bTimestamp), 0, 64); err != nil {
@@ -50,11 +50,11 @@ func checkTimestamp(bTimestamp []byte, expireAfterDays int) error {
 
 	cookieTime := time.Unix(timestamp, 0)
 
-	if cookieIsExpired(cookieTime, expireAfterDays) {
+	if cookieIsExpired(cookieTime, maxAgeDays) {
 		return fmt.Errorf("Expired Cookie")
 	}
 
-	if cookieIsFromFuture(cookieTime, expireAfterDays) {
+	if cookieIsFromFuture(cookieTime, maxAgeDays) {
 		return fmt.Errorf("Cookie timestamp is in the future," +
 			"possible tampering")
 	}
@@ -67,7 +67,7 @@ func checkTimestamp(bTimestamp []byte, expireAfterDays int) error {
 }
 
 // DecodeSignedValue returns the given signed cookie if it validates, or error.
-func DecodeSignedValue(secret, name, signedValue string, expireAfterDays int) (string, error) {
+func DecodeSignedValue(secret, name, signedValue string, maxAgeDays int) (string, error) {
 	var decodedValue string
 
 	if signedValue == "" {
@@ -90,7 +90,7 @@ func DecodeSignedValue(secret, name, signedValue string, expireAfterDays int) (s
 		return "", fmt.Errorf("Invalid signature")
 	}
 
-	if err := checkTimestamp(timestamp, expireAfterDays); err != nil {
+	if err := checkTimestamp(timestamp, maxAgeDays); err != nil {
 		return "", err
 	}
 
@@ -101,8 +101,8 @@ func DecodeSignedValue(secret, name, signedValue string, expireAfterDays int) (s
 	return decodedValue, nil
 }
 
-func MustDecodeSignedValue(secret, name, signedValue string, expireAfterDays int) string {
-	v, err := DecodeSignedValue(secret, name, signedValue, expireAfterDays)
+func MustDecodeSignedValue(secret, name, signedValue string, maxAgeDays int) string {
+	v, err := DecodeSignedValue(secret, name, signedValue, maxAgeDays)
 
 	if err != nil {
 		panic(err)
@@ -160,7 +160,7 @@ func SetSecureCookie(w http.ResponseWriter, secret string, c *http.Cookie) {
 // r is usually a http.Request if you're in an handler or http.Response if you're dealing
 // with http.Get client response;
 // secret should be a long, random sequence of bytes
-func GetSecureCookie(r WithCookie, secret, name string, expireAfterDays int) (*http.Cookie, error) {
+func GetSecureCookie(r WithCookie, secret, name string, maxAgeDays int) (*http.Cookie, error) {
 	var c *http.Cookie
 
 	for _, x := range r.Cookies() {
@@ -174,7 +174,7 @@ func GetSecureCookie(r WithCookie, secret, name string, expireAfterDays int) (*h
 		return nil, http.ErrNoCookie
 	}
 
-	if v, err := DecodeSignedValue(secret, c.Name, c.Value, expireAfterDays); err != nil {
+	if v, err := DecodeSignedValue(secret, c.Name, c.Value, maxAgeDays); err != nil {
 		return nil, err
 	} else {
 		c.Value = v
