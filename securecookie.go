@@ -160,7 +160,7 @@ func SetSecureCookie(w http.ResponseWriter, secret string, c *http.Cookie) {
 // r is usually a http.Request if you're in an handler or http.Response if you're dealing
 // with http.Get client response;
 // secret should be a long, random sequence of bytes
-func GetSecureCookie(r WithCookie, secret, name string) (*http.Cookie, error) {
+func GetSecureCookie(r WithCookie, secret, name string, expireAfterDays int) (*http.Cookie, error) {
 	var c *http.Cookie
 
 	for _, x := range r.Cookies() {
@@ -174,7 +174,7 @@ func GetSecureCookie(r WithCookie, secret, name string) (*http.Cookie, error) {
 		return nil, http.ErrNoCookie
 	}
 
-	if v, err := DecodeSignedValue(secret, c.Name, c.Value); err != nil {
+	if v, err := DecodeSignedValue(secret, c.Name, c.Value, expireAfterDays); err != nil {
 		return nil, err
 	} else {
 		c.Value = v
