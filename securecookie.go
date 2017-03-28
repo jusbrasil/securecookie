@@ -9,16 +9,16 @@
 package securecookie
 
 import (
-    "bytes"
-    "crypto/hmac"
-    "crypto/sha1"
-    "encoding/base64"
-    "encoding/hex"
     "fmt"
-    "net/http"
+    "bytes"
+    "time"
+    "crypto/sha1"
+    "crypto/hmac"
+    "encoding/hex"
+    "encoding/base64"
     "strconv"
     "strings"
-    "time"
+    "net/http"
 )
 
 // WithCookie is usually a http.Request or http.Response.
@@ -43,7 +43,7 @@ func checkTimestamp(bTimestamp []byte, maxAgeDays int) error {
 
     if t, err := strconv.ParseInt(string(bTimestamp), 0, 64); err != nil {
         return fmt.Errorf("Invalid timestamp: %v, got error: %s",
-            bTimestamp, err)
+                          bTimestamp, err)
     } else {
         timestamp = t
     }
@@ -56,7 +56,7 @@ func checkTimestamp(bTimestamp []byte, maxAgeDays int) error {
 
     if cookieIsFromFuture(cookieTime, maxAgeDays) {
         return fmt.Errorf("Cookie timestamp is in the future," +
-            "possible tampering")
+                          "possible tampering")
     }
 
     if cookieIsTampered(bTimestamp) {
@@ -74,7 +74,7 @@ func DecodeSignedValue(secret, name, signedValue string, maxAgeDays int) (string
         return "", fmt.Errorf("Signed value is empty")
     }
 
-    parts := bytes.Split([]byte(signedValue), []byte("|"))
+    parts := bytes.Split([]byte(signedValue),[]byte("|"))
 
     if len(parts) != 3 {
         return "", fmt.Errorf("Incomplete signed value")
@@ -131,9 +131,9 @@ func CreateSignedValue(secret, name, value string, createdAt time.Time) string {
     b64Value := base64.URLEncoding.EncodeToString([]byte(value))
 
     signature := createSignature(secret,
-        []byte(name),
-        []byte(b64Value),
-        []byte(ts))
+                                 []byte(name),
+                                 []byte(b64Value),
+                                 []byte(ts))
 
     signedValue := strings.Join([]string{b64Value, ts, fmt.Sprintf("%s", signature)}, "|")
 
