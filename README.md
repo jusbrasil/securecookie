@@ -18,14 +18,14 @@ CreateSignedValue signs and timestamps a string so it cannot be forged.
 #### func  DecodeSignedValue
 
 ```go
-func DecodeSignedValue(secret, name, signedValue string) (string, error)
+func DecodeSignedValue(secret, name, signedValue string, maxAgeDays int) (string, error)
 ```
 DecodeSignedValue returns the given signed cookie if it validates, or error.
 
 #### func  GetSecureCookie
 
 ```go
-func GetSecureCookie(r *http.Response, secret, name string) (*http.Cookie, error)
+func GetSecureCookie(r *http.Response, secret, name string, maxAgeDays int) (*http.Cookie, error)
 ```
 GetSecureCookie returns the named cookie provided in the response or ErrNoCookie
 if not found, or error if secure cookie value cannot be decoded. Secret should
@@ -34,7 +34,7 @@ be a long, random sequence of bytes
 #### func  MustDecodeSignedValue
 
 ```go
-func MustDecodeSignedValue(secret, name, signedValue string) string
+func MustDecodeSignedValue(secret, name, signedValue string, maxAgeDays int) string
 ```
 
 #### func  SetSecureCookie
